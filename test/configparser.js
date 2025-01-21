@@ -13,7 +13,8 @@ describe('ConfigParser object', function(){
 			'im running out of ideas',
 			'interpolation',
 			'permissive_section:headers%!?',
-			'more_complex_interpolation'
+			'more_complex_interpolation',
+            'camelCaseSection'
 		]);
 	});
 
@@ -83,16 +84,26 @@ describe('ConfigParser object', function(){
 
 
 	describe('Transform configuration keys', function(){
-		const config = new ConfigParser({transform: 'upper'});
-		before(function(){
+		describe('upper', () => {
+            const config = new ConfigParser({transform: 'upper'});
+            before(function(){
+                config.read('test/data/file.ini');
+            });
 
-			config.read('test/data/file.ini');
-		});
+            it('should should upper keys', function () {
+                expect(config.sections().indexOf('CAMELCASESECTION')).to.be.eql(7)
+            })
+        })
+        describe('lower', () => {
+            const config = new ConfigParser({transform: 'lower'});
+            before(function(){
+                config.read('test/data/file.ini');
+            });
 
-		it('should should upper keys', function () {
-			console.log('---',config.sections() )
-			expect(config.sections().indexOf('SECTION1')).to.be.eql(0)
-		})
+            it('should should upper keys', function () {
+                expect(config.sections().indexOf('camelcasesection')).to.be.eql(7)
+            })
+        })
 	})
 
 });

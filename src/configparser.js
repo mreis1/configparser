@@ -37,8 +37,8 @@ const writeFileAsync = util.promisify(fs.writeFile);
  * @constructor
  */
 function ConfigParser(options) {
-	options = options || {};
-	this._transform = options.transform || 'none';
+    options = options || {};
+    this._transform = options.transform || 'none';
     this._sections = {};
 }
 
@@ -104,7 +104,7 @@ ConfigParser.prototype.read = function(file) {
     const lines = fs.readFileSync(file)
         .toString('utf8')
         .split(LINE_BOUNDARY);
-    parseLines.call(this, lines, {
+    parseLines.call(this, {file, lines}, {
         transform: this._transform
     });
 };
@@ -117,7 +117,7 @@ ConfigParser.prototype.readAsync = async function(file) {
     const lines = (await readFileAsync(file))
         .toString('utf8')
         .split(LINE_BOUNDARY);
-    parseLines.call(this, lines, {
+    parseLines.call(this, {file, lines}, {
         transform: this._transform
     });
 }
@@ -237,22 +237,24 @@ ConfigParser.prototype.writeAsync = function(file) {
     return writeFileAsync(file, out);
 }
 
-function parseLines(lines, options) {
+function parseLines(obj, options) {
+    const lines = obj.lines.map(v => v.trim());
+    const file = obj.file;
     options = options || {};
-	let transform = options.transform;
+    let transform = options.transform;
     let curSec = null;
     let upperCaseKey = function(key){
-	    if (key === void 0 || key === null) return;
+        if (key === void 0 || key === null) return;
         if (!transform){
             return key;
         }
-	    if (transform === 'upper') {
-		    return key.toUpperCase();
-	    }
-	    else if (transform === 'lower') {
-		    return key.toLowerCase();
-	    } else {
-	        return key;
+        if (transform === 'upper') {
+            return key.toUpperCase();
+        }
+        else if (transform === 'lower') {
+            return key.toLowerCase();
+        } else {
+            return key;
         }
     };
 
@@ -271,7 +273,7 @@ function parseLines(lines, options) {
                 const key = res[1];
                 curSec[upperCaseKey(key)] = res[2];
             } else {
-                throw new errors.ParseError(file, lineNumber, line);
+                throw new errors.ParseError(file || '', lineNumber, line);
             }
         }
     });
