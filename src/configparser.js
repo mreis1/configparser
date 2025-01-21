@@ -34,11 +34,52 @@ const readFileAsync = util.promisify(fs.readFile);
 const writeFileAsync = util.promisify(fs.writeFile);
 
 /**
+ * A constructor function for creating a `ConfigParser` instance.
+ * The `ConfigParser` is designed to parse configuration files and manage their sections.
+ *
  * @constructor
+ * @param {Object} [options] - Optional configuration options.
+ * @param {'none' | 'lower' | 'upper'} [options.transform='none'] - Specifies the type of transformation to apply to the file's content.
+ *        - `'none'`: No transformation (default).
+ *        - `'lower'`: Converts all text to lowercase.
+ *        - `'upper'`: Converts all text to uppercase.
+ * @param {Function|null} [options.onInvalidLine=null] - A callback to handle invalid lines during parsing.
+ *        - The callback receives a single argument: an object with the following properties:
+ *          - `opt.line` {string}: The content of the invalid line.
+ *          - `opt.lineNumber` {number}: The number of the invalid line in the file.
+ *          - `opt.file` {string}: The file path being parsed.
  */
 function ConfigParser(options) {
     options = options || {};
+
+    /**
+     * @private
+     * @type {string|null}
+     * The file to be parsed. Initially set to null.
+     */
+    this._file = null;
+
+    /**
+     * @private
+     * @type {'none' | 'lower' | 'upper'}
+     * Transformation type to be applied. Defaults to 'none' if not specified in options.
+     */
     this._transform = options.transform || 'none';
+
+    /**
+     * @private
+     * @type {Function|null}
+     * A callback function to handle invalid lines, or null if no handler is provided.
+     * The callback should accept an object with properties: `line`, `lineNumber`, and `file`.
+     */
+    this._onInvalidLine = options.onInvalidLine || null;
+
+    /**
+     * @private
+     * @type {Object}
+     * An object to store sections parsed from the configuration file.
+     * Each key represents a section name, and its value contains the section's data.
+     */
     this._sections = {};
 }
 
@@ -101,12 +142,11 @@ ConfigParser.prototype.hasKey = function (section, key) {
  * @param {string|Buffer|int} file - Filename or File Descriptor
  */
 ConfigParser.prototype.read = function(file) {
+    this._file = file;
     const lines = fs.readFileSync(file)
         .toString('utf8')
         .split(LINE_BOUNDARY);
-    parseLines.call(this, {file, lines}, {
-        transform: this._transform
-    });
+    parseLines.call(this, lines);
 };
 
 /**
@@ -114,12 +154,11 @@ ConfigParser.prototype.read = function(file) {
  * @param {string|Buffer|int} file - Filename or File Descriptor
  */
 ConfigParser.prototype.readAsync = async function(file) {
+    this._file = file;
     const lines = (await readFileAsync(file))
         .toString('utf8')
         .split(LINE_BOUNDARY);
-    parseLines.call(this, {file, lines}, {
-        transform: this._transform
-    });
+    parseLines.call(this, lines);
 }
 
 /**
@@ -237,13 +276,13 @@ ConfigParser.prototype.writeAsync = function(file) {
     return writeFileAsync(file, out);
 }
 
-function parseLines(obj, options) {
-    const lines = obj.lines.map(v => v.trim());
-    const file = obj.file;
-    options = options || {};
-    let transform = options.transform;
+function parseLines(lines) {
+    lines = lines.map(v => v.replace(/^\s+/,''));
+    const file = this._file;
+    let onInvalidLine = typeof this._onInvalidLine === 'function' ? this._onInvalidLine : null;
+    let transform = this._transform;
     let curSec = null;
-    let upperCaseKey = function(key){
+    let transformKey = function(key){
         if (key === void 0 || key === null) return;
         if (!transform){
             return key;
@@ -261,19 +300,20 @@ function parseLines(obj, options) {
     lines.forEach((line, lineNumber) => {
         if(!line || line.match(COMMENT)) return;
         let res = SECTION.exec(line);
-        if(res){
+        if(res){ // header
             const header = res[1];
             curSec = {};
-            this._sections[upperCaseKey(header)] = curSec;
-        } else if(!curSec) {
+            this._sections[transformKey(header)] = curSec;
+        } else if(!curSec) { // no section
             throw new errors.MissingSectionHeaderError(file, lineNumber, line);
-        } else {
+        } else { // regular line
             res = KEY.exec(line);
-            if(res){
+            if(res && res[1] !== '' && line[0] !== '='){
                 const key = res[1];
-                curSec[upperCaseKey(key)] = res[2];
+                curSec[transformKey(key)] = res[2];
             } else {
-                throw new errors.ParseError(file || '', lineNumber, line);
+                if (onInvalidLine) onInvalidLine({file, lineNumber, line});
+                else throw new errors.ParseError(file || '', lineNumber, line);
             }
         }
     });

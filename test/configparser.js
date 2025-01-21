@@ -2,7 +2,9 @@ const expect = require('chai').expect;
 const ConfigParser = require('../src/configparser');
 
 describe('ConfigParser object', function(){
-    const config = new ConfigParser();
+    const config = new ConfigParser({
+        onInvalidLine: (errorInfo) => {}
+    });
     config.read('test/data/file.ini');
 
 	it('should return all sections in the config file', function () {
@@ -14,7 +16,8 @@ describe('ConfigParser object', function(){
 			'interpolation',
 			'permissive_section:headers%!?',
 			'more_complex_interpolation',
-            'camelCaseSection'
+            'camelCaseSection',
+            'section_with_errors'
 		]);
 	});
 
@@ -85,7 +88,7 @@ describe('ConfigParser object', function(){
 
 	describe('Transform configuration keys', function(){
 		describe('upper', () => {
-            const config = new ConfigParser({transform: 'upper'});
+            const config = new ConfigParser({transform: 'upper', onInvalidLine: () => {}});
             before(function(){
                 config.read('test/data/file.ini');
             });
@@ -95,7 +98,7 @@ describe('ConfigParser object', function(){
             })
         })
         describe('lower', () => {
-            const config = new ConfigParser({transform: 'lower'});
+            const config = new ConfigParser({transform: 'lower', onInvalidLine: () => {}});
             before(function(){
                 config.read('test/data/file.ini');
             });
@@ -105,5 +108,27 @@ describe('ConfigParser object', function(){
             })
         })
 	})
+    describe('Errors', () => {
+        describe('No "onInvalidLine" cb.', () => {
+            it('should throw if invalid line is detected', () => {
+                expect(() => {
+                    let f = new ConfigParser({})
+                    f.read('test/data/file.ini');
+                }).to.throw();
+            })
+        })
+        describe('No "onInvalidLine" cb.', () => {
+            it('should throw if invalid line is detected', async () => {
+                let count = 0;
+                let f = new ConfigParser({onInvalidLine: (data) => count++});
+                f.read('test/data/file.ini');
+                expect(count).to.be.eql(2);
+            })
+        })
+        // it('should report error', () => {
+        //     console.log(config.keys('section_with_errors'))
+        //     expect()
+        // })
+    })
 
 });
